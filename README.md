@@ -92,6 +92,7 @@ Every workflow in the app is backed by real, validated API calls — there is no
 ### 👤 Employee
 
 - ⏱️ **Attendance** — check in / check out for the day, view personal attendance history
+- 🌙 **No runaway shifts** — check in, close the tab and never check out, and the day is closed for you the next time attendance is read: capped at `MAX_SHIFT_HOURS` (or midnight, whichever comes first) and flagged `auto`, instead of counting all night
 - ☕ **Away** — step out mid-shift (lunch, an errand) without checking out: the clock pauses and that time is subtracted from the day's working hours. Several trips out a day are fine, and checking out while still away ends the break there rather than paying for it
 - 🗓️ **Leave requests** — apply for leave, edit while still pending, track approval status
 - 💵 **Payslips** — view and print your own generated payslips
@@ -200,6 +201,7 @@ From there, log into the Admin portal and use **Add Employee** to create every s
 | `MONGO_URI` | MongoDB connection string (local or Atlas) |
 | `JWT_SECRET` | Secret used to sign the 1-hour access tokens |
 | `JWT_REFRESH_SECRET` | *Optional.* Secret for the 20-day refresh tokens. Falls back to `JWT_SECRET`, but a separate value is better — it keeps the two token kinds from being swapped for one another |
+| `MAX_SHIFT_HOURS` | *Optional.* Cap used when closing a day nobody checked out of. Defaults to `12` |
 | `DEMO_ACCOUNT_EMAILS` | *Optional.* Comma-separated emails of the locked demo accounts. Defaults to `admin@gmail.com,employee@gmail.com` |
 
 **`client/.env`** / **`client/.env.production`**
