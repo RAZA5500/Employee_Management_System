@@ -84,7 +84,7 @@ Every workflow in the app is backed by real, validated API calls — there is no
 ### 🛡️ Admin
 
 - 👥 **Employee management** — create, edit, delete employee records (each creation provisions a real linked login account with a temporary password)
-- 📅 **Attendance oversight** — read-only view of every employee's daily check-in/check-out history
+- 📅 **Attendance oversight** — read-only view of every employee's daily check-in/check-out history, including the time they were away
 - 🗓️ **Leave approvals** — approve, reject, or reset the status of any leave request
 - 💰 **Payroll** — generate, view, and delete monthly payslips per employee (with duplicate-period protection)
 - 📊 **Dashboard** — live counts: total employees, departments, today's attendance, pending leave
@@ -92,6 +92,7 @@ Every workflow in the app is backed by real, validated API calls — there is no
 ### 👤 Employee
 
 - ⏱️ **Attendance** — check in / check out for the day, view personal attendance history
+- ☕ **Away** — step out mid-shift (lunch, an errand) without checking out: the clock pauses and that time is subtracted from the day's working hours. Several trips out a day are fine, and checking out while still away ends the break there rather than paying for it
 - 🗓️ **Leave requests** — apply for leave, edit while still pending, track approval status
 - 💵 **Payslips** — view and print your own generated payslips
 - ⚙️ **Settings** — update profile info, change password
@@ -142,7 +143,7 @@ Employee-Management-System/
 │       ├── employee/       # employee profiles (linked to user accounts)
 │       ├── leave/          # leave requests
 │       ├── payslip/        # payroll
-│       ├── attendance/     # check-in/check-out
+│       ├── attendance/     # check-in/check-out, away breaks
 │       └── dashboard/      # aggregated stats per role
 │
 └── docs/screenshots/       # README assets
@@ -197,7 +198,8 @@ From there, log into the Admin portal and use **Add Employee** to create every s
 | Variable | Description |
 |---|---|
 | `MONGO_URI` | MongoDB connection string (local or Atlas) |
-| `JWT_SECRET` | Secret used to sign JWTs |
+| `JWT_SECRET` | Secret used to sign the 1-hour access tokens |
+| `JWT_REFRESH_SECRET` | *Optional.* Secret for the 20-day refresh tokens. Falls back to `JWT_SECRET`, but a separate value is better — it keeps the two token kinds from being swapped for one another |
 | `DEMO_ACCOUNT_EMAILS` | *Optional.* Comma-separated emails of the locked demo accounts. Defaults to `admin@gmail.com,employee@gmail.com` |
 
 **`client/.env`** / **`client/.env.production`**
@@ -214,19 +216,21 @@ From there, log into the Admin portal and use **Add Employee** to create every s
 
 | Group | Endpoints |
 |---|---|
-| **Auth** | `POST /auth/register`, `POST /auth/login`, `GET /auth/profile` |
+| **Auth** | `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/profile` |
 | **Users** | `GET/PATCH /users/me`, full admin CRUD at `/users/:id` |
 | **Employees** | `GET/POST /employees`, `GET /employees/me`, `GET/PATCH/DELETE /employees/:id` |
 | **Leave** | `GET/POST /leaves`, `PATCH/DELETE /leaves/:id` |
 | **Payslips** | `GET/POST /payslips`, `GET/DELETE /payslips/:id` |
-| **Attendance** | `POST /attendance/check-in`, `POST /attendance/check-out`, `GET /attendance/me`, `GET /attendance` |
+| **Attendance** | `POST /attendance/check-in`, `POST /attendance/check-out`, `POST /attendance/away`, `POST /attendance/back`, `GET /attendance/me`, `GET /attendance` |
 | **Dashboard** | `GET /dashboard` — returns role-appropriate stats |
 
 </details>
 
 ## 🔒 Authentication & Security
 
-- Stateless **JWT** auth; the token's role claim drives both frontend route guards and backend `RolesGuard` checks
+- **JWT** auth; the token's role claim drives both frontend route guards and backend `RolesGuard` checks
+- Two tokens per session: a **1-hour access token** sent as `Authorization: Bearer …`, and a **20-day refresh token**. When a request comes back `401`, the client silently calls `POST /auth/refresh` and replays it — so a login lasts 20 days without keeping a long-lived token on every request
+- Refresh tokens are **rotated and single-use**: redeeming one deletes it and issues a new pair, so a stolen copy that has already been spent is rejected. Only a SHA-256 hash of each one is stored, rows expire on their own (Mongo TTL index), and `POST /auth/logout` revokes one immediately
 - Passwords hashed with `bcryptjs`; changing a password requires the current one
 - New employee accounts are provisioned with a temporary password and a `mustChangePassword` flag — the app blocks all navigation with a mandatory "set your password" modal until it's changed
 - Ownership checks everywhere: employees can only ever see their own leave, payslip, and attendance records — never another employee's

@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { api, clearSession, getRole, getToken, setSession } from '../api/client'
+import { api, endSession, getRole, getToken, onSessionChange, setSession } from '../api/client'
 import { isDemoAccount } from '../assets/assets'
 
 const AuthContext = createContext(null)
@@ -26,16 +26,27 @@ export const AuthProvider = ({ children }) => {
         refetchProfile()
     }, [refetchProfile, token])
 
+    // The api layer silently swaps an expired access token for a fresh one (and
+    // clears the session when the 20-day refresh token is gone too) — mirror
+    // whatever it ends up with.
+    useEffect(() => onSessionChange(({ token: nextToken, role: nextRole }) => {
+        setToken(nextToken)
+        setRole(nextRole)
+        if (!nextToken) setProfile(null)
+    }), [])
+
     const login = useCallback(async (email, password) => {
         const res = await api.post('/auth/login', { email, password })
-        setSession(res.access_token, res.role)
+        setSession(res.access_token, res.role, res.refresh_token)
         setToken(res.access_token)
         setRole(res.role)
         return res
     }, [])
 
     const logout = useCallback(() => {
-        clearSession()
+        // revokes the refresh token server side; the local session is dropped
+        // straight away either way
+        endSession()
         setToken(null)
         setRole(null)
         setProfile(null)

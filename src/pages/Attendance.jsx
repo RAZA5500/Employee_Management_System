@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react'
-import { LogInIcon, LogOutIcon } from 'lucide-react'
+import { CoffeeIcon, LogInIcon, LogOutIcon, PlayIcon } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
-import { getDayTypeDisplay, getWorkingHoursDisplay } from '../assets/assets'
+import { getAwayHoursDisplay, getDayTypeDisplay, getWorkingHoursDisplay, isAway, isToday } from '../assets/assets'
 import EmptyState from '../components/EmptyState'
 import PageHeader from '../components/PageHeader'
 
@@ -12,12 +12,6 @@ const formatDate = (date) =>
 
 const formatTime = (date) =>
   date ? new Date(date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "—"
-
-const isToday = (date) => {
-  const d = new Date(date)
-  const now = new Date()
-  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()
-}
 
 const Attendance = () => {
 
@@ -46,31 +40,32 @@ const Attendance = () => {
 
   const todayRecord = !isAdmin ? records.find((r) => isToday(r.date)) : null
 
-  const handleCheckIn = async () => {
+  const runAction = async (path, successMessage, failureMessage) => {
     setActionLoading(true)
     try {
-      await api.post('/attendance/check-in')
-      toast.success("Checked in successfully")
+      await api.post(path)
+      toast.success(successMessage)
       fetchRecords()
     } catch (err) {
-      toast.error(err.message || "Failed to check in")
+      toast.error(err.message || failureMessage)
     } finally {
       setActionLoading(false)
     }
   }
 
-  const handleCheckOut = async () => {
-    setActionLoading(true)
-    try {
-      await api.post('/attendance/check-out')
-      toast.success("Checked out successfully")
-      fetchRecords()
-    } catch (err) {
-      toast.error(err.message || "Failed to check out")
-    } finally {
-      setActionLoading(false)
-    }
-  }
+  const handleCheckIn = () =>
+    runAction('/attendance/check-in', "Checked in successfully", "Failed to check in")
+
+  const handleCheckOut = () =>
+    runAction('/attendance/check-out', "Checked out successfully", "Failed to check out")
+
+  const handleAway = () =>
+    runAction('/attendance/away', "You're away — the clock is paused", "Failed to mark you away")
+
+  const handleBack = () =>
+    runAction('/attendance/back', "Welcome back — the clock is running again", "Failed to bring you back")
+
+  const away = isAway(todayRecord)
 
   return (
     <div className="animate-fade-in">
@@ -89,13 +84,33 @@ const Attendance = () => {
                   <LogInIcon size={16} /> Check In
                 </button>
               ) : !todayRecord.checkOut ? (
-                <button
-                  onClick={handleCheckOut}
-                  disabled={actionLoading}
-                  className="btn-primary flex items-center gap-2 disabled:opacity-50"
-                >
-                  <LogOutIcon size={16} /> Check Out
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  {away ? (
+                    <button
+                      onClick={handleBack}
+                      disabled={actionLoading}
+                      className="btn-primary flex items-center gap-2 disabled:opacity-50"
+                    >
+                      <PlayIcon size={16} /> I'm Back
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleAway}
+                      disabled={actionLoading}
+                      className="btn-secondary flex items-center gap-2 disabled:opacity-50"
+                      title="Pause the clock while you step out"
+                    >
+                      <CoffeeIcon size={16} /> Away
+                    </button>
+                  )}
+                  <button
+                    onClick={handleCheckOut}
+                    disabled={actionLoading}
+                    className={`${away ? "btn-secondary" : "btn-primary"} flex items-center gap-2 disabled:opacity-50`}
+                  >
+                    <LogOutIcon size={16} /> Check Out
+                  </button>
+                </div>
               ) : (
                 <span className="badge badge-success">Checked out for today</span>
               )}
@@ -103,6 +118,18 @@ const Attendance = () => {
           )
         }
       />
+
+      {away && (
+        <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 animate-fade-in">
+          <CoffeeIcon className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>
+            You're marked <span className="font-medium">away</span> since{" "}
+            {formatTime(todayRecord.awayPeriods.find((period) => !period.end)?.start)} — this
+            time is paused and won't count toward today's total. Hit{" "}
+            <span className="font-medium">I'm Back</span> when you return.
+          </p>
+        </div>
+      )}
 
       {loading ? (
         <div className="card overflow-x-auto">
@@ -113,6 +140,7 @@ const Attendance = () => {
                 <th>Date</th>
                 <th>Check In</th>
                 <th>Check Out</th>
+                <th>Away</th>
                 <th>Working Hours</th>
                 <th>Day Type</th>
               </tr>
@@ -122,6 +150,7 @@ const Attendance = () => {
                 <tr key={i}>
                   {isAdmin && <td><div className="skeleton h-4 w-28" /></td>}
                   <td><div className="skeleton h-4 w-24" /></td>
+                  <td><div className="skeleton h-4 w-16" /></td>
                   <td><div className="skeleton h-4 w-16" /></td>
                   <td><div className="skeleton h-4 w-16" /></td>
                   <td><div className="skeleton h-4 w-20" /></td>
@@ -142,6 +171,7 @@ const Attendance = () => {
                 <th>Date</th>
                 <th>Check In</th>
                 <th>Check Out</th>
+                <th>Away</th>
                 <th>Working Hours</th>
                 <th>Day Type</th>
               </tr>
@@ -161,7 +191,20 @@ const Attendance = () => {
                     )}
                     <td>{formatDate(r.date)}</td>
                     <td>{formatTime(r.checkIn)}</td>
-                    <td>{formatTime(r.checkOut)}</td>
+                    <td>
+                      {formatTime(r.checkOut)}
+                      {r.autoCheckOut && (
+                        <span
+                          className="badge badge-warning ml-2"
+                          title={`Never checked out — the system closed this day automatically, capped at the end of the shift`}
+                        >
+                          auto
+                        </span>
+                      )}
+                    </td>
+                    <td className={getAwayHoursDisplay(r) === "—" ? "" : "text-amber-700"}>
+                      {getAwayHoursDisplay(r)}
+                    </td>
                     <td>{getWorkingHoursDisplay(r)}</td>
                     <td>
                       {dayType.label !== "—" && (

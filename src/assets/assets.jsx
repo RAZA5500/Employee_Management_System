@@ -40,21 +40,64 @@ export const MONTH_NAMES = [
     "July", "August", "September", "October", "November", "December",
 ];
 
+const MS_PER_HOUR = 1000 * 60 * 60;
+
+export function isToday(date) {
+    const d = new Date(date);
+    const now = new Date();
+    return (
+        d.getFullYear() === now.getFullYear() &&
+        d.getMonth() === now.getMonth() &&
+        d.getDate() === now.getDate()
+    );
+}
+
+/** "6h 45m", never "6h 60m". */
+export function formatHours(hours) {
+    const totalMinutes = Math.max(0, Math.round(hours * 60));
+    return `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m`;
+}
+
+/**
+ * Hours the employee has stepped out for. A period they have not come back
+ * from yet keeps counting up to now — that time is never part of the total.
+ */
+export function getAwayHours(record) {
+    return (record?.awayPeriods || []).reduce((hours, period) => {
+        const end = period.end ? new Date(period.end).getTime() : Date.now();
+        const span = end - new Date(period.start).getTime();
+        return hours + Math.max(0, span) / MS_PER_HOUR;
+    }, 0);
+}
+
+/** True while the employee is checked in but currently stepped out. */
+export function isAway(record) {
+    if (!record || record.checkOut) return false;
+    return (record.awayPeriods || []).some((period) => !period.end);
+}
+
 export function getWorkingHoursDisplay(record) {
     if (record.workingHours != null) {
-        const hrs = Math.floor(record.workingHours);
-        const mins = Math.round((record.workingHours - hrs) * 60);
-        return `${hrs}h ${mins}m`;
+        return formatHours(record.workingHours);
     }
-    // If still checked in (no checkout), compute live hours
+    // A day that was never checked out stops counting when the day ends — the
+    // server closes it off (capped) the next time the records are read.
+    if (record.checkIn && !record.checkOut && !isToday(record.date)) {
+        return "Not checked out";
+    }
+    // Still checked in: count up live, minus whatever time they were away
     if (record.checkIn && !record.checkOut) {
-        const diffMs = Date.now() - new Date(record.checkIn).getTime();
-        const diffHours = diffMs / (1000 * 60 * 60);
-        const hrs = Math.floor(diffHours);
-        const mins = Math.round((diffHours - hrs) * 60);
-        return `${hrs}h ${mins}m (ongoing)`;
+        const onSite = (Date.now() - new Date(record.checkIn).getTime()) / MS_PER_HOUR;
+        const worked = onSite - getAwayHours(record);
+        return `${formatHours(worked)} ${isAway(record) ? "(paused)" : "(ongoing)"}`;
     }
     return "—";
+}
+
+/** Time excluded from the day's total, live while the employee is still away. */
+export function getAwayHoursDisplay(record) {
+    const hours = record?.checkOut ? record.awayHours || 0 : getAwayHours(record);
+    return hours > 0 ? formatHours(hours) : "—";
 }
 
 export function getDayTypeDisplay(record) {
@@ -70,8 +113,13 @@ export function getDayTypeDisplay(record) {
             className: map[record.dayType] || "bg-slate-100 text-slate-600",
         };
     }
+    if (isAway(record)) {
+        return { label: "Away", className: "badge-warning" };
+    }
     if (record.checkIn && !record.checkOut) {
-        return { label: "In Progress", className: "bg-indigo-100 text-indigo-700" };
+        return isToday(record.date)
+            ? { label: "In Progress", className: "bg-indigo-100 text-indigo-700" }
+            : { label: "Not Checked Out", className: "badge-danger" };
     }
     return { label: "—", className: "" };
 }
