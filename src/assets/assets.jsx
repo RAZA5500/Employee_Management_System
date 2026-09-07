@@ -11,6 +11,21 @@ export const DEMO_ACCOUNT_EMAILS = (
     import.meta.env.VITE_DEMO_ACCOUNT_EMAILS || "admin@gmail.com,employee@gmail.com"
 ).split(",").map((email) => email.trim().toLowerCase()).filter(Boolean);
 
+// Credentials of those same accounts, so the login screens can offer a one-tap
+// "fill the test account for me" button.
+export const DEMO_CREDENTIALS = {
+    ADMIN: {
+        label: "admin",
+        email: import.meta.env.VITE_DEMO_ADMIN_EMAIL || "admin@gmail.com",
+        password: import.meta.env.VITE_DEMO_ADMIN_PASSWORD || "12345678",
+    },
+    EMPLOYEE: {
+        label: "employee",
+        email: import.meta.env.VITE_DEMO_EMPLOYEE_EMAIL || "employee@gmail.com",
+        password: import.meta.env.VITE_DEMO_EMPLOYEE_PASSWORD || "12345678",
+    },
+};
+
 export const DEMO_LOCK_MESSAGE = "Demo account — name, email and password can't be changed";
 
 export const DEMO_DELETE_MESSAGE = "Demo account — this account can't be deleted";

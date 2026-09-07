@@ -5,6 +5,8 @@ import { useState } from 'react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext'
 import PasswordInput from './PasswordInput'
+import DemoFillButton from './DemoFillButton'
+import { DEMO_CREDENTIALS } from '../assets/assets'
 
 const LoginForm = ({role, title, subtitle}) => {
 
@@ -15,6 +17,14 @@ const LoginForm = ({role, title, subtitle}) => {
     const [password, setPassword] = useState("")
     const [error, setError] = useState("")
     const [loading, setLoading] = useState(false)
+
+    const demo = DEMO_CREDENTIALS[role]
+
+    const fillDemoCredentials = () => {
+        setEmail(demo.email)
+        setPassword(demo.password)
+        setError("")
+    }
 
     const handleSubmit = async (e) => {
         e.preventDefault()
@@ -63,6 +73,17 @@ const LoginForm = ({role, title, subtitle}) => {
                       <div className='mb-6 p-4 bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-xl flex items-start gap-3'>
                           <div className='w-1.5 h-1.5 rounded-full bg-rose-500 mt-1.5 shrink-0' />
                           {error}
+                      </div>
+                  )}
+
+                  {demo && (
+                      <div className='mb-6'>
+                          <DemoFillButton
+                              label={demo.label}
+                              email={demo.email}
+                              onFill={fillDemoCredentials}
+                              disabled={loading}
+                          />
                       </div>
                   )}
 
